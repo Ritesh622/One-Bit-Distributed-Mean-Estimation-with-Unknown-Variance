@@ -1,0 +1,6 @@
+numpy==1.26.4
+scipy==1.14.1
+tqdm==4.66.5
+matplotlib==3.9.2
+torch==2.5.1
+pathlib==1.0.1

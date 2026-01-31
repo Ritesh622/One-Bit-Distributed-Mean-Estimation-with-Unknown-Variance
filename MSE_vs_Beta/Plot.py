@@ -2,12 +2,16 @@
 # Import and Device Set up
 # ============================================================
 from __future__ import annotations
-import os, shutil, pickle, sys
+
+import pickle
+import shutil
+import sys
+from pathlib import Path
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import MaxNLocator, NullLocator, NullFormatter
-from pathlib import Path
 
 # =============================================================================
 # Project Root Import
@@ -34,7 +38,7 @@ matplotlib.rcParams.update({
 })
 
 def enable_latex():
-    """ LaTeX text rendering."""
+    """LaTeX text rendering (fallback to non-TeX if unavailable)."""
     try:
         matplotlib.rcParams.update({"text.usetex": True})
         plt.figure()
@@ -50,15 +54,19 @@ enable_latex()
 # Directory Setup
 # =============================================================================
 script_dir = Path(__file__).resolve().parent
+
+# Match Experiment.py output:
 data_file = script_dir / "Beta_Data" / "ggd_beta_bounds.pkl"
 if not data_file.exists():
     raise FileNotFoundError(f"Missing data file: {data_file}")
 
 out_dir = script_dir / "Beta_Plots"
-if os.path.exists(out_dir):
+
+if out_dir.exists():
     print(f"Removing existing directory: {out_dir}")
     shutil.rmtree(out_dir)
-os.makedirs(out_dir, exist_ok=True)
+
+out_dir.mkdir(parents=True, exist_ok=True)
 print(f"Created directory: {out_dir}")
 
 # =============================================================================
@@ -94,7 +102,7 @@ ratio = ensure_positive(data["ratio"])
 beta_star = float(data["beta_star"])
 
 # =============================================================================
-# (1) Plot Constants vs Beta
+# Plot Constants vs Beta
 # =============================================================================
 print("\nGenerating plot: constants_vs_beta.pdf")
 plt.figure(figsize=(12, 8))
@@ -115,7 +123,7 @@ plt.close()
 print(f"Saved plot: {plot_path}")
 
 # =============================================================================
-# (2) Plot Ratio vs Beta
+#  Plot Ratio vs Beta
 # =============================================================================
 print("Generating plot: ratio_vs_beta.pdf")
 plt.figure(figsize=(12, 8))

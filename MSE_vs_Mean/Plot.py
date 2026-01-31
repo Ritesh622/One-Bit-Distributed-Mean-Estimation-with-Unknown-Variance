@@ -25,8 +25,8 @@ matplotlib.rcParams.update({
     "legend.fontsize": 24,
     "xtick.labelsize": 30,
     "ytick.labelsize": 30,
-    "lines.linewidth": 3.0,  
-    "lines.markersize": 8, 
+    "lines.linewidth": 3.0,
+    "lines.markersize": 8,
 })
 
 def enable_latex():
@@ -42,10 +42,13 @@ enable_latex()
 # Directory Setup
 # =============================================================================
 HERE = Path(__file__).resolve().parent
-IN_DIR = HERE / "MSE_vs_mu"
+
+# UPDATED: must match simulation output folder name
+IN_DIR  = HERE / "MSE_vs_mu_Data"
 OUT_DIR = HERE / "MSE_vs_mu_Plots"
+
 AVG_FILE = IN_DIR / "avg_mse_vs_mu.pkl"
-WC_FILE = IN_DIR / "wc_mse_vs_mu.pkl"
+WC_FILE  = IN_DIR / "wc_mse_vs_mu.pkl"
 
 if os.path.exists(OUT_DIR):
     print(f"Removing existing directory: {OUT_DIR}")
@@ -54,6 +57,10 @@ os.makedirs(OUT_DIR, exist_ok=True)
 print(f"Created directory: {OUT_DIR}")
 
 def fallback_find(name: str) -> Path | None:
+    # Prefer the expected output folder if present
+    preferred = list((HERE / "MSE_vs_mu_Data").rglob(name))
+    if preferred:
+        return preferred[0]
     cands = list(HERE.rglob(name))
     return cands[0] if cands else None
 

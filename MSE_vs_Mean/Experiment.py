@@ -20,7 +20,7 @@ import All_Schemes as AS  # unified distribution utilities
 # --------------------------------------------------------------------------------------------------
 # Configuration
 # --------------------------------------------------------------------------------------------------
-decoder_dist   = "gaussian"      # "gaussian", "sin2", "logistic", etc.
+decoder_dist   = "gaussian"      # "gaussian" only (see NOTE below)
 sigma_true     = AS.SIGMA_GLOB
 beta_true      = AS.BETA_GAUSS
 num_samples    = 40000
@@ -29,9 +29,21 @@ num_mu_points  = 4000
 num_trials     = 3000
 seed           = 42
 
-# Paths
-root_dir = Path(os.getcwd())
-out_dir  = root_dir / "MSE_vs_mu_Data"
+# NOTE (important):
+# This script generates samples using a Generalized Gaussian (GGD) with beta_true.
+# In your All_Schemes.py, "gaussian" is implemented as GGD(beta=1.5).
+# So the simulation is "matched" ONLY when decoder_dist == "gaussian".
+# If we want logistic/hypsecant/sin2 matched sampling, we must rewrite the sampler (not minimal).
+if decoder_dist != "gaussian":
+    raise ValueError(
+        f"This script currently generates GGD(beta={beta_true}) samples, so it is matched only for "
+        f"decoder_dist='gaussian'. You set decoder_dist='{decoder_dist}'. "
+        f"Either set decoder_dist='gaussian' or ask me to rewrite the sampler for matched '{decoder_dist}'."
+    )
+
+# Paths (write relative to this script, not cwd)
+script_dir = Path(__file__).resolve().parent
+out_dir  = script_dir / "MSE_vs_mu_Data"
 wc_file  = out_dir / "wc_mse_vs_mu.pkl"
 avg_file = out_dir / "avg_mse_vs_mu.pkl"
 
@@ -196,8 +208,8 @@ def run_simulation() -> None:
                 f1.cpu().numpy(), f2.cpu().numpy(), float(t1), float(t2), ppf_cache
             )
             if idx_ok is None:
-                mse_nonadaptive_avg.append(0.0)
-                mse_nonadaptive_wc.append(0.0)
+                mse_nonadaptive_avg.append(np.nan)
+                mse_nonadaptive_wc.append(np.nan)
             else:
                 diff = mu_est - mu
                 mse = diff * diff
@@ -214,38 +226,34 @@ def run_simulation() -> None:
                 f1.cpu().numpy(), f2.cpu().numpy(), float(t1), float(t2), ppf_cache
             )
             if idx_ok is None:
-                mse_adaptive_avg.append(0.0)
-                mse_adaptive_wc.append(0.0)
+                mse_adaptive_avg.append(np.nan)
+                mse_adaptive_wc.append(np.nan)
                 continue
 
             X3_valid = X_n3.index_select(0, torch.from_numpy(idx_ok).to(device))
             mu_est_torch = torch.from_numpy(mu_est).to(device)
             v3 = (mu_tensor + X3_valid < mu_est_torch[:, None])
             f3 = v3.to(torch.float64).mean(dim=1).cpu().numpy()
+
             mu_final = decode_second_round_cpu(f3, mu_est, sigma_est, ppf_cache)
             if mu_final is None:
-                mse_adaptive_avg.append(0.0)
-                mse_adaptive_wc.append(0.0)
+                mse_adaptive_avg.append(np.nan)
+                mse_adaptive_wc.append(np.nan)
             else:
                 diff = mu_final - mu
                 mse = diff * diff
                 mse_adaptive_avg.append(float(np.mean(mse)))
                 mse_adaptive_wc.append(float(np.max(mse)))
 
-    # ------------------------------------------------------------------------------------------------
-    # Orientation check (ensure adaptive < non-adaptive)
-    # ------------------------------------------------------------------------------------------------
-    na_avg = np.asarray(mse_nonadaptive_avg)
-    ad_avg = np.asarray(mse_adaptive_avg)
-    na_wc  = np.asarray(mse_nonadaptive_wc)
-    ad_wc  = np.asarray(mse_adaptive_wc)
+    na_avg = np.asarray(mse_nonadaptive_avg, dtype=float)
+    ad_avg = np.asarray(mse_adaptive_avg, dtype=float)
+    na_wc  = np.asarray(mse_nonadaptive_wc, dtype=float)
+    ad_wc  = np.asarray(mse_adaptive_wc, dtype=float)
 
+    # Do NOT swap curves. Just warn if adaptive looks worse.
     if np.nanmedian(ad_avg) > np.nanmedian(na_avg):
-        print("[warning] Adaptive MSE appears higher than non-adaptive — swapping curves for clarity.")
-        na_avg, ad_avg = ad_avg, na_avg
-        na_wc, ad_wc = ad_wc, na_wc
-
-    print(f"[check mu approx= 0] avg(non-adaptive)={np.median(na_avg):.3e}, avg(adaptive)={np.median(ad_avg):.3e}")
+        print("[warning] Adaptive median MSE is higher than non-adaptive. This may indicate a bug, mismatch, or finite-sample effects.")
+    print(f"[check median over mu] NA={np.nanmedian(na_avg):.3e}, AD={np.nanmedian(ad_avg):.3e}")
 
     # ------------------------------------------------------------------------------------------------
     # Save results
@@ -269,16 +277,17 @@ def run_simulation() -> None:
             "nonadaptive": na_wc.tolist(),
             "adaptive": ad_wc.tolist(),
             "stat": "worst_case",
-            "note": f"WC MSE vs mu; matched family ({decoder_dist}); CRN+antithetic  GPU bits/means; PPF on CPU."
-        }, f)
+            "note": f"WC MSE vs mu; GGD(beta={beta_true}) samples; PPF decode for {decoder_dist}; CRN+antithetic; GPU bits/means; PPF on CPU."
+        }, f, protocol=pickle.HIGHEST_PROTOCOL)
+
     with open(avg_file, "wb") as f:
         pickle.dump({
             **meta,
             "nonadaptive": na_avg.tolist(),
             "adaptive": ad_avg.tolist(),
             "stat": "average",
-            "note": f"AVG MSE vs mu; matched family ({decoder_dist}); CRN+antithetic  GPU bits/means; PPF on CPU."
-        }, f)
+            "note": f"AVG MSE vs mu; GGD(beta={beta_true}) samples; PPF decode for {decoder_dist}; CRN+antithetic; GPU bits/means; PPF on CPU."
+        }, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     print("===================================================================================")
     print("Simulation complete. Results saved in:", out_dir)

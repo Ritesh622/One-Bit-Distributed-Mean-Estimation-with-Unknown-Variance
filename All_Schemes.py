@@ -1,10 +1,10 @@
 #===================================================================================================
-#    All_Schemes.py : Unified Distributions, Sampling, Encoding/Decoding, Bounds
+#     Unified Distributions, Sampling, Encoding/Decoding, Bounds
 #===================================================================================================
 from __future__ import annotations
 
 #===================================================================================================
-#    Imports & Types
+#    Imports and Types
 #===================================================================================================
 from typing import Callable, Dict, Literal, Optional, Tuple, List, Union
 import numpy as np
@@ -12,9 +12,9 @@ from scipy import special as sp
 from scipy.stats import norm, logistic, hypsecant
 
 #===================================================================================================
-#    Constants & Global Settings
+#    Constants and Global Settings
 #===================================================================================================
-DistName = Literal["gaussian", "logistic", "hypsecant", "sin2"]
+DistName = Literal["gaussian", "gaussian_b2", "logistic", "hypsecant", "sin2"]
 SIGMA_GLOB  = 2.0
 NA_CONST = 0.1034                        # Non-adaptive constant
 BETA_GAUSS = 1.5                         # Shape parameter for GGD-style "gaussian"
@@ -45,7 +45,7 @@ def ggd_pdf(x: Union[np.ndarray, float], beta: float = BETA_GAUSS) -> Union[np.n
     coef = beta / (2.0 * alpha * sp.gamma(1.0 / beta))
     return coef * np.exp(-(np.abs(x) / alpha) ** beta)
 
-def _build_ggd_table(beta: float = BETA_GAUSS, x_max: float = 20.0, dx: float = 1e-4) -> Dict[str, np.ndarray]:
+def build_ggd_table(beta: float = BETA_GAUSS, x_max: float = 20.0, dx: float = 1e-4) -> Dict[str, np.ndarray]:
     """High-resolution lookup for GGD(beta) at unit variance."""
     if dx <= 0:
         raise ValueError("dx must be positive")
@@ -57,60 +57,61 @@ def _build_ggd_table(beta: float = BETA_GAUSS, x_max: float = 20.0, dx: float = 
     F = np.cumsum(p) * dx
     F[0], F[-1] = 0.0, 1.0
     return {"x": x, "pdf": p, "cdf": F}
+
 #===============================================================
 # --- Build tables for beta =1.5 and beta =2.0 ---
 #================================================================
-_GGD = _build_ggd_table(beta=BETA_GAUSS)
-_GGD_B2 = _build_ggd_table(beta=BETA_GAUSS_2)
+GGD_TABLE_B15 = build_ggd_table(beta=BETA_GAUSS)
+GGD_TABLE_B2  = build_ggd_table(beta=BETA_GAUSS_2)
 
 #============= beta =1.5 =========================
-def _ggd_unit_pdf_from_table():
-    x, p = _GGD["x"], _GGD["pdf"]
+def ggd_unit_pdf_from_table():
+    x, p = GGD_TABLE_B15["x"], GGD_TABLE_B15["pdf"]
     def pdf(y: float) -> float:
         return float(np.interp(float(y), x, p))
     return pdf
 
-def _ggd_unit_cdf_from_table():
-    x, F = _GGD["x"], _GGD["cdf"]
+def ggd_unit_cdf_from_table():
+    x, F = GGD_TABLE_B15["x"], GGD_TABLE_B15["cdf"]
     def cdf(y: float) -> float:
         return float(np.clip(np.interp(float(y), x, F), 0.0, 1.0))
     return cdf
 
-def _ggd_unit_ppf_from_table(u: float) -> float:
+def ggd_unit_ppf_from_table(u: float) -> float:
     u = float(np.clip(u, 0.0, 1.0))
-    if u <= 0.0: 
+    if u <= 0.0:
         return -np.inf
-    if u >= 1.0: 
+    if u >= 1.0:
         return np.inf
-    x, F = _GGD["x"], _GGD["cdf"]
+    x, F = GGD_TABLE_B15["x"], GGD_TABLE_B15["cdf"]
     return float(np.interp(u, F, x))
 
 # ===================== beta =2.0 =======================
-def _ggd_unit_pdf_from_table_beta2():
-    x, p = _GGD_B2["x"], _GGD_B2["pdf"]
+def ggd_unit_pdf_from_table_beta2():
+    x, p = GGD_TABLE_B2["x"], GGD_TABLE_B2["pdf"]
     def pdf(y: float) -> float:
         return float(np.interp(float(y), x, p))
     return pdf
 
-def _ggd_unit_cdf_from_table_beta2():
-    x, F = _GGD_B2["x"], _GGD_B2["cdf"]
+def ggd_unit_cdf_from_table_beta2():
+    x, F = GGD_TABLE_B2["x"], GGD_TABLE_B2["cdf"]
     def cdf(y: float) -> float:
         return float(np.clip(np.interp(float(y), x, F), 0.0, 1.0))
     return cdf
 
-def _ggd_unit_ppf_from_table_beta2(u: float) -> float:
+def ggd_unit_ppf_from_table_beta2(u: float) -> float:
     u = float(np.clip(u, 0.0, 1.0))
-    if u <= 0.0: 
+    if u <= 0.0:
         return -np.inf
-    if u >= 1.0: 
+    if u >= 1.0:
         return np.inf
-    x, F = _GGD_B2["x"], _GGD_B2["cdf"]
+    x, F = GGD_TABLE_B2["x"], GGD_TABLE_B2["cdf"]
     return float(np.interp(u, F, x))
 
 #===================================================================================================
 #    Sin2 Distribution (p = 1.5): Base Table (PDF/CDF) and Unit-Variance Wrappers
 #===================================================================================================
-def _sin2_log_unnorm_pdf_base(x: np.ndarray) -> np.ndarray:
+def sin2_log_unnorm_pdf_base(x: np.ndarray) -> np.ndarray:
     """
     Unnormalized log PDF for the base sin2 distribution:
     """
@@ -121,12 +122,12 @@ def _sin2_log_unnorm_pdf_base(x: np.ndarray) -> np.ndarray:
            + 1.0)
     return -phi
 
-def _build_sin2_base_table(x_max: float = 50.0, dx: float = 1e-4) -> Dict[str, np.ndarray]:
+def build_sin2_base_table(x_max: float = 50.0, dx: float = 1e-4) -> Dict[str, np.ndarray]:
     """Generate base sin2 PDF/CDF and compute base std s_base."""
     if dx <= 0:
         raise ValueError("dx must be positive")
     x = np.arange(-x_max, x_max + dx, dx, dtype=np.float64)
-    logp = _sin2_log_unnorm_pdf_base(x)
+    logp = sin2_log_unnorm_pdf_base(x)
     p_unnorm = np.exp(logp - np.max(logp))       # stability
     Z = float(np.trapz(p_unnorm, x))
     p = p_unnorm / Z
@@ -137,48 +138,48 @@ def _build_sin2_base_table(x_max: float = 50.0, dx: float = 1e-4) -> Dict[str, n
     s_base = float(np.sqrt(var))
     return {"x": x, "pdf": p, "cdf": F, "s_base": np.array([s_base], dtype=np.float64)}
 
-_SIN2 = _build_sin2_base_table()
+SIN2_TABLE = build_sin2_base_table()
 
 def get_sin2_base_std() -> float:
     """Return s_base (std of the base sin2 before unit-variance scaling)."""
-    return float(_SIN2["s_base"][0])
+    return float(SIN2_TABLE["s_base"][0])
 
-def _sin2_unit_pdf() -> Callable[[float], float]:
+def sin2_unit_pdf() -> Callable[[float], float]:
     """
     Unit-variance sin2 PDF via table scaling:
       if X_base ~ f_base, define Y = X_base / s_base and  Var(Y)=1.
       Then f_unit(y) = s_base · f_base(s_base · y).
     """
-    x = _SIN2["x"]; 
-    p = _SIN2["pdf"]
+    x = SIN2_TABLE["x"]
+    p = SIN2_TABLE["pdf"]
     s = get_sin2_base_std()
     def pdf(y: float) -> float:
         return float(s * np.interp(s * float(y), x, p))
     return pdf
 
-def _sin2_unit_cdf() -> Callable[[float], float]:
+def sin2_unit_cdf() -> Callable[[float], float]:
     """Unit-variance sin2 CDF via table scaling."""
     s = get_sin2_base_std()
-    x = _SIN2["x"] / s
-    F = _SIN2["cdf"]
+    x = SIN2_TABLE["x"] / s
+    F = SIN2_TABLE["cdf"]
     def cdf(y: float) -> float:
         return float(np.clip(np.interp(float(y), x, F), 0.0, 1.0))
     return cdf
 
-def _sin2_unit_ppf(u: float) -> float:
+def sin2_unit_ppf(u: float) -> float:
     """Unit-variance sin2 inverse CDF via interpolation."""
     u = float(np.clip(u, 0.0, 1.0))
-    if u <= 0.0: 
+    if u <= 0.0:
         return -np.inf
-    if u >= 1.0: 
+    if u >= 1.0:
         return np.inf
     s = get_sin2_base_std()
-    x = _SIN2["x"] / s
-    F = _SIN2["cdf"]
+    x = SIN2_TABLE["x"] / s
+    F = SIN2_TABLE["cdf"]
     return float(np.interp(u, F, x))
 
-SIN2_UNITVAR_PDF = _sin2_unit_pdf()
-SIN2_UNITVAR_CDF = _sin2_unit_cdf()
+SIN2_UNITVAR_PDF = sin2_unit_pdf()
+SIN2_UNITVAR_CDF = sin2_unit_cdf()
 
 #===================================================================================================
 #    Unit-Variance Distribution Functions (PDF/CDF/PPF)
@@ -186,10 +187,10 @@ SIN2_UNITVAR_CDF = _sin2_unit_cdf()
 def get_unit_variance_pdf(dist: DistName) -> Callable[[float], float]:
     """Unit-variance PDF for each supported distribution."""
     if dist == "gaussian":
-        return _ggd_unit_pdf_from_table()         
-    if dist == "gaussian_b2" :
-        return _ggd_unit_pdf_from_table_beta2()
-    
+        return ggd_unit_pdf_from_table()
+    if dist == "gaussian_b2":
+        return ggd_unit_pdf_from_table_beta2()
+
     if dist == "logistic":
         s = S_UNIT_LOGISTIC
         return lambda x: float(np.exp(-float(x) / s) / (s * (1.0 + np.exp(-float(x) / s)) ** 2))
@@ -202,9 +203,9 @@ def get_unit_variance_pdf(dist: DistName) -> Callable[[float], float]:
 def get_unit_variance_cdf(dist: DistName) -> Callable[[float], float]:
     """Unit-variance CDF for each supported distribution."""
     if dist == "gaussian":
-        return _ggd_unit_cdf_from_table()   # GGD(beta=1.5)
+        return ggd_unit_cdf_from_table()
     if dist == "gaussian_b2":
-        return _ggd_unit_cdf_from_table_beta2()  # GGD(beta=2)
+        return ggd_unit_cdf_from_table_beta2()
     if dist == "logistic":
         return lambda x: float(logistic.cdf(float(x), loc=0, scale=S_UNIT_LOGISTIC))
     if dist == "hypsecant":
@@ -216,15 +217,15 @@ def get_unit_variance_cdf(dist: DistName) -> Callable[[float], float]:
 def get_unit_variance_ppf(dist: DistName) -> Callable[[float], float]:
     """Unit-variance inverse CDF (PPF) for each supported distribution."""
     if dist == "gaussian":
-        return _ggd_unit_ppf_from_table            #  GGD(beta=1.5)
+        return ggd_unit_ppf_from_table
     if dist == "gaussian_b2":
-        return _ggd_unit_ppf_from_table_beta2            #  GGD(beta=2)
+        return ggd_unit_ppf_from_table_beta2
     if dist == "logistic":
         return lambda u: float(logistic.ppf(float(u), loc=0, scale=S_UNIT_LOGISTIC))
     if dist == "hypsecant":
         return lambda u: float(hypsecant.ppf(float(u)))
     if dist == "sin2":
-        return _sin2_unit_ppf
+        return sin2_unit_ppf
     raise ValueError("Unsupported distribution")
 
 def evaluate_pdf_at_zero(dist: DistName) -> float:
@@ -298,9 +299,35 @@ def decode_adaptive_second_round(
     return float(mu_hat_c - a3 * sigma_hat_c)
 
 #===================================================================================================
-#    Bounds  ( T(f) via monotone envelope & stationary point for sin2)
+#    Bounds  ( Fisher info, T(f) via monotone envelope and stationary point for sin2)
 #===================================================================================================
-def _sin2_phi_prime_base(x: np.ndarray) -> np.ndarray:
+def fisher_continuous(dist: DistName, sigma: float = 1.0, z_max: float = 12.0, dz: float = 1e-4) -> float:
+    """
+    Fisher information for the location parameter in X = mu + sigma Z, where Z ~ unit-variance dist.
+
+    Computes I_Z = integration (f'(z)^2 / f(z)) dz on [-z_max, z_max] numerically,
+    and returns I_X = I_Z / sigma^2.
+    """
+    if sigma <= 0:
+        raise ValueError("sigma must be positive")
+    if dz <= 0:
+        raise ValueError("dz must be positive")
+    if z_max <= 0:
+        raise ValueError("z_max must be positive")
+
+    z = np.arange(-z_max, z_max + dz, dz, dtype=np.float64)
+    f_fun = get_unit_variance_pdf(dist)
+    f = np.array([f_fun(float(zi)) for zi in z], dtype=np.float64)
+
+    # robust floor to avoid 0/0 in tails due to numerical interpolation
+    f = np.maximum(f, 1e-300)
+
+    f_prime = np.gradient(f, dz, edge_order=2)
+    integrand = (f_prime ** 2) / f
+    I_Z = float(np.trapz(integrand, z))
+    return I_Z / (sigma ** 2)
+
+def sin2_phi_prime_base(x: np.ndarray) -> np.ndarray:
     """
      sin2 potential (with exponent P_SIN2):
     """
@@ -311,16 +338,16 @@ def _sin2_phi_prime_base(x: np.ndarray) -> np.ndarray:
     term3 = D_SIN2 * (W_SIN2 / C_SIN2) * np.sin(2.0 * W_SIN2 * z)
     return term1 + term2 + term3
 
-def _sin2_phi_prime_unit(x: np.ndarray) -> np.ndarray:
+def sin2_phi_prime_unit(x: np.ndarray) -> np.ndarray:
     """
     for unit-variance sin2: y = x, base variable = s*x.
     """
     s = get_sin2_base_std()
-    return s * _sin2_phi_prime_base(s * np.asarray(x, dtype=np.float64))
+    return s * sin2_phi_prime_base(s * np.asarray(x, dtype=np.float64))
 
-def _sin2_phi_pp_unit(x: np.ndarray) -> np.ndarray:
+def sin2_phi_pp_unit(x: np.ndarray) -> np.ndarray:
     """
-    _unit(x) for unit-variance sin2.
+    phi''_unit(x) for unit-variance sin2.
     Base second derivative (with z = s x / C):
     """
     s = get_sin2_base_std()
@@ -335,9 +362,9 @@ def _sin2_phi_pp_unit(x: np.ndarray) -> np.ndarray:
     out += (2.0 * D_SIN2 * (W_SIN2 ** 2) / (C_SIN2 ** 2)) * np.cos(2.0 * W_SIN2 * z)
     return out
 
-def _t_fx_generic(dist: DistName, x_max: float, dx: float) -> float:
+def t_fx_generic(dist: DistName, x_max: float, dx: float) -> float:
     """
-    T(f) for (gaussian/logistic/hypsecant):
+    T(f) for (gaussian/logistic/hypsecant/gaussian_b2):
       h(x) = 2 phi'(x) f(x),  with  phi' = -f'(x)/f(x).
     Use the monotone envelope of h and invert it to integrate integral phi'(x(t)) x(t) dt from t=0..h*.
     """
@@ -364,7 +391,7 @@ def _t_fx_generic(dist: DistName, x_max: float, dx: float) -> float:
     integrand = phi_prime_at * x_of_t
     return float(np.trapz(integrand, t_grid))
 
-def _t_fx_sin2(x_max: float, dx: float) -> float:
+def t_fx_sin2(x_max: float, dx: float) -> float:
     """
     Careful T(f) for sin2 (unit variance):
       h(x) = 2 phi'(x) f(x), with analytic phi'_unit and stationarity at phi'' - (phi')^2 = 0.
@@ -373,12 +400,12 @@ def _t_fx_sin2(x_max: float, dx: float) -> float:
     x = np.arange(0.0, x_max + dx, dx, dtype=np.float64)
     f_fun = SIN2_UNITVAR_PDF
     f = np.array([f_fun(float(xi)) for xi in x], dtype=np.float64)
-    phi_prime = _sin2_phi_prime_unit(x)
+    phi_prime = sin2_phi_prime_unit(x)
 
     h = 2.0 * phi_prime * f
     h[h < 0.0] = 0.0
 
-    deriv = _sin2_phi_pp_unit(x) - phi_prime ** 2
+    deriv = sin2_phi_pp_unit(x) - phi_prime ** 2
     idx_cross = np.where(np.diff(np.sign(deriv)) != 0)[0]
     idx_star = int(idx_cross[0]) if len(idx_cross) > 0 else int(np.argmax(h))
 
@@ -392,7 +419,7 @@ def _t_fx_sin2(x_max: float, dx: float) -> float:
 
     t_grid = np.linspace(0.0, h_star, 300_001)
     x_of_t = np.interp(t_grid, h_mono, x_seg)
-    phi_prime_at = _sin2_phi_prime_unit(x_of_t)
+    phi_prime_at = sin2_phi_prime_unit(x_of_t)
     integrand = phi_prime_at * x_of_t
     return float(np.trapz(integrand, t_grid))
 
@@ -406,9 +433,9 @@ def compute_t_fx(dist: DistName, x_max: Optional[float] = None, dx: float = 1e-4
         x_max = 50.0 if dist == "sin2" else 10.0
 
     if dist == "sin2":
-        return _t_fx_sin2(x_max, dx)
+        return t_fx_sin2(x_max, dx)
     else:
-        return _t_fx_generic(dist, x_max, dx)
+        return t_fx_generic(dist, x_max, dx)
 
 def compute_nonadaptive_lower_bound(dist: DistName, sigma: float, override_t: Optional[float] = None) -> float:
     """Non-adaptive lower bound: (NA_CONST / T(f_X)) * \sigma^2 """
@@ -426,42 +453,7 @@ def compute_adaptive_lower_bound(dist: DistName, sigma: float) -> float:
         raise ValueError("sigma must be positive")
     fx0 = evaluate_pdf_at_zero(dist)
     return (sigma ** 2) / (4.0 * (fx0 ** 2))
-#===============================================================================
-def unit_variance_pdf(dist: str) -> Callable[[float], float]:
-    if dist == "gaussian":
-        return lambda x: float(ggd_pdf(x, beta=BETA_GAUSS))
-    elif dist == "gaussian_b2":
-        return lambda x: float(ggd_pdf(x, beta=BETA_GAUSS_2))
-    elif dist == "logistic":
-        def pdf(x: float) -> float:
-            s = S_UNIT_LOGISTIC
-            z = float(x) / s
-            ez = np.exp(-z)
-            return float(ez / (s * (1.0 + ez) ** 2))
-        return pdf
-    elif dist == "hypsecant":
-        return lambda x: float(0.5 / np.cosh(np.pi * float(x) / 2.0))
-    elif dist == "sin2":
-        return SIN2_UNITVAR_PDF
-    else:
-        
-        raise ValueError(f"Unsupported distribution: {dist}")
-    
-def unit_variance_cdf(dist: str) -> Callable[[float], float]:
-    if dist == "gaussian":
-        return lambda x: norm.cdf(x)
-    if dist == "gaussian_b2":
-        return lambda x: norm.cdf(x)
-    elif dist == "logistic":
-        scale = S_UNIT_LOGISTIC
-        return lambda x: logistic.cdf(x, loc=0, scale=scale)
-    elif dist == "hypsecant":
-        return lambda x: hypsecant.cdf(x)
-    elif dist == "sin2":
-        # Placeholder (replace with sin2 CDF if defined)
-        return lambda x: norm.cdf(x)  # Dummy value
-    else:
-        raise ValueError(f"Unsupported distribution: {dist}")
+
 #=======================================================================
 def compute_nonadaptive_upper_bound(
     dist: str, n: float, sigma: float,
@@ -481,8 +473,8 @@ def compute_nonadaptive_upper_bound(
     if k1 <= 0 or k2 <= 0:
         raise ValueError("k₁ and k₂ must be positive")
 
-    f = unit_variance_pdf(dist)
-    F = unit_variance_cdf(dist)
+    f = get_unit_variance_pdf(dist)   # type: ignore[arg-type]
+    F = get_unit_variance_cdf(dist)   # type: ignore[arg-type]
 
     mus = np.linspace(mu_min, mu_max, n_mu, dtype=np.float64)
     denom = (theta1 - theta2) ** 2
@@ -536,10 +528,10 @@ K_CONFIGS_ADAPTIVE: List[Tuple[float, float, float]] = [
 ]
 
 #===================================================================================================
-#    __all__ 
+#    __all__
 #===================================================================================================
 __all__ = [
-    # Types & K-configs
+    # Types and K-configs
     "DistName",
     "K_CONFIGS_NONADAPTIVE", "K_CONFIGS_ADAPTIVE",
 
@@ -553,10 +545,13 @@ __all__ = [
     # Encode/Decode
     "encode_nonadaptive", "decode_nonadaptive", "decode_adaptive_first_round", "decode_adaptive_second_round",
 
+    # Fisher information
+    "fisher_continuous",
+
     # Bounds
     "compute_t_fx",
     "compute_nonadaptive_lower_bound", "compute_adaptive_lower_bound",
-    "compute_nonadaptive_upper_bound", 
+    "compute_nonadaptive_upper_bound",
 ]
 
 #===================================================================================================
@@ -574,12 +569,12 @@ if __name__ == "__main__":
     print("------------------------------------------------------------------")
 
     for dist in dist_set:
-        fx0 = evaluate_pdf_at_zero(dist)
-        t_val = compute_t_fx(dist)
+        fx0 = evaluate_pdf_at_zero(dist)   # type: ignore[arg-type]
+        t_val = compute_t_fx(dist)         # type: ignore[arg-type]
 
         for sigma in std_list:
-            C_non = compute_nonadaptive_lower_bound(dist, sigma, override_t=t_val)
-            C_adp = compute_adaptive_lower_bound(dist, sigma)
+            C_non = compute_nonadaptive_lower_bound(dist, sigma, override_t=t_val)  # type: ignore[arg-type]
+            C_adp = compute_adaptive_lower_bound(dist, sigma)                       # type: ignore[arg-type]
             ratio = C_non / C_adp if C_adp > 0 else np.inf
             print(f"{dist:<10} {sigma:<5.1f} {fx0:10.4f} {t_val:8.4f} "
                   f"{C_non:9.4f} {C_adp:9.4f} {ratio:9.4f}")

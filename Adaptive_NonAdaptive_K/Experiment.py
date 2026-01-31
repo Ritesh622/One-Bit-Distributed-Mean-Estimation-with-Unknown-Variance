@@ -2,6 +2,7 @@
 #  Import and  Device Set up
 #===================================================================================================
 from __future__ import annotations
+
 import numpy as np
 import random
 import os
@@ -32,37 +33,39 @@ def set_all_seeds(seed: int) -> None:
     np.random.seed(seed)
 
 if REPRO_MODE:
-    pass
+    # Note: this experiment is mostly deterministic except for binomial draws,
+    # and we reseed per (mu, dist, K, n) below. So global seed is optional.
+    set_all_seeds(GLOBAL_BASE_SEED)
 
 #===================================================================================================
-#    Helper Functions 
+#    Helper Functions
 #===================================================================================================
-def _cdf(dist: str):
+def get_cdf(dist: str):
     """Unit-variance CDF callable from All_Schemes."""
     return AS.get_unit_variance_cdf(dist)
 
-def _ppf(dist: str):
+def get_ppf(dist: str):
     """Unit-variance PPF callable from All_Schemes."""
     return AS.get_unit_variance_ppf(dist)
 
-def _bernoulli_mean(dist: str, q: float, mu: float, sigma: float, n: int, F=None) -> float:
+def bernoulli_mean(dist: str, q: float, mu: float, sigma: float, n: int, F=None) -> float:
     """Single Binomial draw for mean of 1[X<q], with p = F((q-mu)/sigma)."""
     if n <= 0:
         return np.nan
     if sigma <= 0:
         raise ValueError("sigma must be positive")
     if F is None:
-        F = _cdf(dist)
+        F = get_cdf(dist)
     z = (q - mu) / sigma
     p = float(np.clip(F(z), 1e-12, 1.0 - 1e-12))
     return np.random.binomial(int(n), p) / float(n)
 
-def _decode_first_from_means(dist: str, f1: float, f2: float, q1: float, q2: float, PPF=None):
+def decode_first_from_means(dist: str, f1: float, f2: float, q1: float, q2: float, PPF=None):
     """Same algebra as AS.decode_adaptive_first_round but uses means directly."""
     if not (0.0 < f1 < 1.0 and 0.0 < f2 < 1.0):
         return None
     if PPF is None:
-        PPF = _ppf(dist)
+        PPF = get_ppf(dist)
     a1 = float(PPF(f1))
     a2 = float(PPF(f2))
     if a1 == a2:
@@ -71,12 +74,12 @@ def _decode_first_from_means(dist: str, f1: float, f2: float, q1: float, q2: flo
     mu_hat    = (a1 * q2 - a2 * q1) / (a1 - a2)
     return float(mu_hat), float(sigma_hat)
 
-def _decode_second_from_mean(dist: str, f3: float, mu_hat: float, sigma_hat: float, PPF=None):
+def decode_second_from_mean(dist: str, f3: float, mu_hat: float, sigma_hat: float, PPF=None):
     """Same algebra as AS.decode_adaptive_second_round but uses mean directly."""
     if not (0.0 < f3 < 1.0):
         return None
     if PPF is None:
-        PPF = _ppf(dist)
+        PPF = get_ppf(dist)
     a3 = float(PPF(f3))
     return float(mu_hat - a3 * sigma_hat)
 
@@ -86,17 +89,18 @@ def compute_thresholds(mu_min: float, mu_max: float) -> tuple[float, float]:
     theta2 = mu_min + 2.0 * (mu_max - mu_min) / 3.0
     return float(theta1), float(theta2)
 
-def save_results(data: dict, path: str) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+def save_results(data: dict, path: str | Path) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "wb") as f:
-        pickle.dump(data, f)
+        pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
 def ksuffix(prefix: str, K1: float | None = None, K2: float | None = None) -> str:
     if K1 is None or K2 is None:
         return prefix
     return f"{prefix}_K1_{K1:.2f}_K2_{K2:.2f}".replace('.', '_')
 
-def _solve_n3_for_total_n(n: int) -> int:
+def solve_n3_for_total_n(n: int) -> int:
     """n1=n2=n3/log n3; choose n3 so total is n."""
     if n <= 10:
         return max(3, n - 2)
@@ -106,9 +110,9 @@ def _solve_n3_for_total_n(n: int) -> int:
         mid = 0.5 * (lo + hi)
         if f(mid) < 0:
             lo = mid
-        else: 
+        else:
             hi = mid
-        if (hi - lo) < 1e-7: 
+        if (hi - lo) < 1e-7:
             break
     n3 = int(round(0.5 * (lo + hi)))
     return max(3, n3)
@@ -117,33 +121,34 @@ def _solve_n3_for_total_n(n: int) -> int:
 #    Directories
 #===================================================================================================
 current_path = pathlib.Path(__file__).parent.resolve()
-parent_dir = os.getcwd()
 
-mse_data_dir    = os.path.join(parent_dir, 'Avg_Worst_MSE_data')
-worst_case_dir  = os.path.join(mse_data_dir, 'Worst_Case')
-avg_case_dir    = os.path.join(mse_data_dir, 'Average_Case')
-benchmark_dir   = os.path.join(mse_data_dir, 'Benchmark')
-upper_bound_dir = os.path.join(mse_data_dir, 'Upper_Bound')
+# Write outputs relative to this script (NOT current working directory)
+mse_data_dir    = current_path / "Avg_Worst_MSE_data"
+worst_case_dir  = mse_data_dir / "Worst_Case"
+avg_case_dir    = mse_data_dir / "Average_Case"
+benchmark_dir   = mse_data_dir / "Benchmark"
+upper_bound_dir = mse_data_dir / "Upper_Bound"
 
-if os.path.exists(mse_data_dir):
+if mse_data_dir.exists():
     print(f"Flushing existing directory: {mse_data_dir}")
     shutil.rmtree(mse_data_dir)
+
 for d in [worst_case_dir, avg_case_dir, benchmark_dir, upper_bound_dir]:
-    os.makedirs(d, exist_ok=True)
+    d.mkdir(parents=True, exist_ok=True)
     print(f"Created directory: {d}")
 
 #===================================================================================================
 #    Experiment Settings
 #===================================================================================================
 USE_SPECIAL_ADAPTIVE = True   # n1 = n2 = n3 / log n3
-dist_set = ["gaussian", "gaussian_b2","logistic", "hypsecant", "sin2"] 
+dist_set = ["gaussian", "gaussian_b2", "logistic", "hypsecant", "sin2"]
 #dist_set = ["gaussian"]    # for quick testing
 
 n_max = 40000
 step = 1000
 total_samples = np.append(np.arange(200, n_max, step), n_max)
 
-n_trials = 2000
+n_trials =   2000 #2000
 mu_range = [AS.MU_MIN, AS.MU_MAX]
 true_std = AS.SIGMA_GLOB
 q1, q2 = compute_thresholds(*mu_range)
@@ -181,8 +186,8 @@ def run_nonadaptive_block(K1: float, K2: float) -> None:
         )
 
         # cache per-dist callables once
-        F = _cdf(decode_dist)
-        PPF = _ppf(decode_dist)
+        F = get_cdf(decode_dist)
+        PPF = get_ppf(decode_dist)
 
         for n in total_samples:
             n1 = int(round(K1 * n))
@@ -206,9 +211,9 @@ def run_nonadaptive_block(K1: float, K2: float) -> None:
 
                 mse_na_trials = []
                 for _ in range(n_trials):
-                    f1 = _bernoulli_mean(decode_dist, q1, mu, true_std, n1, F)
-                    f2 = _bernoulli_mean(decode_dist, q2, mu, true_std, n2, F)
-                    res = _decode_first_from_means(decode_dist, f1, f2, q1, q2, PPF)
+                    f1 = bernoulli_mean(decode_dist, q1, mu, true_std, n1, F)
+                    f2 = bernoulli_mean(decode_dist, q2, mu, true_std, n2, F)
+                    res = decode_first_from_means(decode_dist, f1, f2, q1, q2, PPF)
                     if res:
                         est_mu, _ = res
                         mse_na_trials.append((est_mu - mu) ** 2)
@@ -236,13 +241,13 @@ def run_nonadaptive_block(K1: float, K2: float) -> None:
             'nonadaptive_worst_mse': worst_mse_na,
             'nonadaptive_worst_mu':  worst_mu_na,
             'K1': K1, 'K2': K2, 'all_mu_encode_data': all_mu_data
-        }, os.path.join(worst_case_dir, f"{decode_dist}_{tag}_worst_case.pkl"))
+        }, worst_case_dir / f"{decode_dist}_{tag}_worst_case.pkl")
 
         save_results({
             'samples': total_samples.tolist(),
             'nonadaptive_average_mse': avg_case_mse_na,
             'K1': K1, 'K2': K2, 'all_mu_encode_data': all_mu_data
-        }, os.path.join(avg_case_dir, f"{decode_dist}_{tag}_average_case.pkl"))
+        }, avg_case_dir / f"{decode_dist}_{tag}_average_case.pkl")
 
         # Save UB curve as C/n and metadata
         save_results({
@@ -254,9 +259,9 @@ def run_nonadaptive_block(K1: float, K2: float) -> None:
             'theta1': float(q1), 'theta2': float(q2),
             'mu_range': (float(mu_range[0]), float(mu_range[1])),
             'dist': decode_dist
-        }, os.path.join(upper_bound_dir, f"{decode_dist}_{tag}_nonadaptive_ub.pkl"))
+        }, upper_bound_dir / f"{decode_dist}_{tag}_nonadaptive_ub.pkl")
 
-        print(f"[OK NON-ADAPT] UB saved (C={C_ub_const:.6e} at μ*={ub_best_mu:.3f}); empirical curves saved.")
+        print(f"[OK NON-ADAPT] UB saved (C={C_ub_const:.6e} at mu*={ub_best_mu:.3f}); empirical curves saved.")
 
 #===================================================================================================
 #    Adaptive Block (K1 + K2 < 1, n3 = n - n1 - n2)
@@ -276,8 +281,8 @@ def run_adaptive_block(K1: float, K2: float) -> None:
         all_mu_data = {}
 
         # cache per-dist callables once
-        F = _cdf(decode_dist)
-        PPF = _ppf(decode_dist)
+        F = get_cdf(decode_dist)
+        PPF = get_ppf(decode_dist)
 
         for n in total_samples:
             n1 = int(round(K1 * n))
@@ -300,14 +305,14 @@ def run_adaptive_block(K1: float, K2: float) -> None:
 
                 mse_ad_trials = []
                 for _ in range(n_trials):
-                    f1 = _bernoulli_mean(decode_dist, q1, mu, true_std, n1, F)
-                    f2 = _bernoulli_mean(decode_dist, q2, mu, true_std, n2, F)
-                    res = _decode_first_from_means(decode_dist, f1, f2, q1, q2, PPF)
+                    f1 = bernoulli_mean(decode_dist, q1, mu, true_std, n1, F)
+                    f2 = bernoulli_mean(decode_dist, q2, mu, true_std, n2, F)
+                    res = decode_first_from_means(decode_dist, f1, f2, q1, q2, PPF)
                     if res is None:
                         continue
                     mu_hat, sigma_hat = res
-                    f3 = _bernoulli_mean(decode_dist, mu_hat, mu, true_std, n3, F)  # refine at q=mu_hat
-                    est_mu_final = _decode_second_from_mean(decode_dist, f3, mu_hat, sigma_hat, PPF)
+                    f3 = bernoulli_mean(decode_dist, mu_hat, mu, true_std, n3, F)  # refine at q=mu_hat
+                    est_mu_final = decode_second_from_mean(decode_dist, f3, mu_hat, sigma_hat, PPF)
                     if est_mu_final is not None:
                         mse_ad_trials.append((est_mu_final - mu) ** 2)
 
@@ -333,20 +338,20 @@ def run_adaptive_block(K1: float, K2: float) -> None:
             'adaptive_worst_mse': worst_mse_ad,
             'adaptive_worst_mu':  worst_mu_ad,
             'K1': K1, 'K2': K2, 'all_mu_encode_data': all_mu_data
-        }, os.path.join(worst_case_dir, f"{decode_dist}_{tag}_worst_case.pkl"))
+        }, worst_case_dir / f"{decode_dist}_{tag}_worst_case.pkl")
 
         save_results({
             'samples': total_samples.tolist(),
             'adaptive_average_mse': avg_case_mse_ad,
             'K1': K1, 'K2': K2, 'all_mu_encode_data': all_mu_data
-        }, os.path.join(avg_case_dir, f"{decode_dist}_{tag}_average_case.pkl"))
+        }, avg_case_dir / f"{decode_dist}_{tag}_average_case.pkl")
 
         print(f"[OK ADAPT] Saved for {decode_dist} ({tag})")
 
 #===================================================================================================
 #    Adaptive Special Schedule: n1 = n2 = n3 / log n3
 #===================================================================================================
-def _run_adaptive_special_block() -> None:
+def run_adaptive_special_block() -> None:
     tag = "ADAPT_SPECIAL"
 
     for decode_dist in dist_set:
@@ -357,11 +362,11 @@ def _run_adaptive_special_block() -> None:
         all_mu_data = {}
 
         # cache per-dist callables once
-        F = _cdf(decode_dist)
-        PPF = _ppf(decode_dist)
+        F = get_cdf(decode_dist)
+        PPF = get_ppf(decode_dist)
 
         for n in total_samples:
-            n3 = _solve_n3_for_total_n(int(n))
+            n3 = solve_n3_for_total_n(int(n))
             n1 = int(round(n3 / np.log(max(n3, 3))))
             n2 = n1
 
@@ -371,8 +376,10 @@ def _run_adaptive_special_block() -> None:
 
             if n1 <= 0 or n2 <= 0 or n3 <= 0:
                 print(f"[WARN ADAPT SPECIAL] invalid split at n={n} -> ({n1},{n2},{n3})")
-                worst_mse_ad.append(np.nan); worst_mu_ad.append(None)
-                avg_case_mse_ad.append(np.nan); all_mu_data[int(n)] = {}
+                worst_mse_ad.append(np.nan)
+                worst_mu_ad.append(None)
+                avg_case_mse_ad.append(np.nan)
+                all_mu_data[int(n)] = {}
                 continue
 
             max_mse_ad, max_mu_ad_i = -np.inf, None
@@ -385,14 +392,14 @@ def _run_adaptive_special_block() -> None:
 
                 mse_ad_trials = []
                 for _ in range(n_trials):
-                    f1 = _bernoulli_mean(decode_dist, q1, mu, true_std, n1, F)
-                    f2 = _bernoulli_mean(decode_dist, q2, mu, true_std, n2, F)
-                    res = _decode_first_from_means(decode_dist, f1, f2, q1, q2, PPF)
+                    f1 = bernoulli_mean(decode_dist, q1, mu, true_std, n1, F)
+                    f2 = bernoulli_mean(decode_dist, q2, mu, true_std, n2, F)
+                    res = decode_first_from_means(decode_dist, f1, f2, q1, q2, PPF)
                     if res is None:
                         continue
                     mu_hat, sigma_hat = res
-                    f3 = _bernoulli_mean(decode_dist, mu_hat, mu, true_std, n3, F)
-                    est_mu_final = _decode_second_from_mean(decode_dist, f3, mu_hat, sigma_hat, PPF)
+                    f3 = bernoulli_mean(decode_dist, mu_hat, mu, true_std, n3, F)
+                    est_mu_final = decode_second_from_mean(decode_dist, f3, mu_hat, sigma_hat, PPF)
                     if est_mu_final is not None:
                         mse_ad_trials.append((est_mu_final - mu) ** 2)
 
@@ -418,13 +425,13 @@ def _run_adaptive_special_block() -> None:
             'adaptive_worst_mse': worst_mse_ad,
             'adaptive_worst_mu':  worst_mu_ad,
             'special': True, 'all_mu_encode_data': all_mu_data
-        }, os.path.join(worst_case_dir, f"{decode_dist}_{tag}_worst_case.pkl"))
+        }, worst_case_dir / f"{decode_dist}_{tag}_worst_case.pkl")
 
         save_results({
             'samples': total_samples.tolist(),
             'adaptive_average_mse': avg_case_mse_ad,
             'special': True, 'all_mu_encode_data': all_mu_data
-        }, os.path.join(avg_case_dir, f"{decode_dist}_{tag}_average_case.pkl"))
+        }, avg_case_dir / f"{decode_dist}_{tag}_average_case.pkl")
 
         print(f"[OK ADAPT SPECIAL] Saved for {decode_dist} ({tag})")
 
@@ -438,7 +445,7 @@ for K1, K2 in AS.K_CONFIGS_ADAPTIVE:
     run_adaptive_block(K1, K2)
 
 if USE_SPECIAL_ADAPTIVE:
-    _run_adaptive_special_block()
+    run_adaptive_special_block()
 
 #===================================================================================================
 #    Lower Bounds (independent of K)
@@ -450,14 +457,14 @@ for encode_dist in dist_set:
         "samples": total_samples.tolist(),
         "mse": [C_adapt / n for n in total_samples],
         "C_adapt": C_adapt
-    }, os.path.join(benchmark_dir, f"{encode_dist}_benchmark.pkl"))
+    }, benchmark_dir / f"{encode_dist}_benchmark.pkl")
 
     C_nonad = AS.compute_nonadaptive_lower_bound(encode_dist, CENTRAL_TRUE_STD)
     save_results({
         "samples": total_samples.tolist(),
         "mse": [C_nonad / n for n in total_samples],
         "C_nonadaptive": C_nonad
-    }, os.path.join(benchmark_dir, f"{encode_dist}_nonadaptive_lb.pkl"))
+    }, benchmark_dir / f"{encode_dist}_nonadaptive_lb.pkl")
 
     rel = "<" if C_nonad < C_adapt else "≥"
     ratio = (C_nonad / C_adapt) if C_adapt > 0 else float('inf')

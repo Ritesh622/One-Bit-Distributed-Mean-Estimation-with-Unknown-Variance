@@ -1,158 +1,157 @@
-One-Bit Estimation: Adaptive and Non-Adaptive Schemes
-====================================================================================================
+One-Bit Distributed Mean Estimation:
+Adaptive and Non-Adaptive Schemes
+================================================================================
 
-This code evaluates the performance of adaptive and non-adaptive one-bit
-communication schemes for distributed mean estimation. It computes the
-Mean Squared Error (MSE) for different source distributions, different
-sample sizes, and various experiment configurations.
+This repository contains simulation code for evaluating adaptive and
+non-adaptive one-bit communication schemes for distributed mean estimation.
+The performance metric of interest is the Mean Squared Error (MSE).
 
-The results can be used to compare theoretical lower and upper bounds
-with the simulated MSE for both adaptive and non-adaptive cases.
+The code supports multiple symmetric distributions and evaluates:
+- Empirical MSE from simulations
+- Theoretical upper bounds
+- Theoretical lower bounds (adaptive, non-adaptive, and Fisher-information-based)
 
----------------------------------------------------------------------------------------------------
+The results enable a direct comparison between adaptive and non-adaptive
+schemes under strict communication constraints.
+
+--------------------------------------------------------------------------------
 Setup
----------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
- Install all dependencies listed in the `requirements.txt` file as:
+Install all required dependencies using:
 
     pip install -r requirements.txt
 
----------------------------------------------------------------------------------------------------
-Main File
----------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+Core Module
+--------------------------------------------------------------------------------
 
 - All_Schemes.py
-  This is the main module used by all experiments.
-  It contains:
-    * Implementation of all distributions (Gaussian, Logistic,
-      Hyperbolic Secant, and Sin2)
-    * Sampling functions with location and scale parameters
-    * Encoding and decoding rules for adaptive and non-adaptive schemes
-    * Functions for theoretical bounds on MSE
 
-All other scripts import this file, so it should be kept in the root
-directory.
+This is the central module used by all experiments. It contains:
+  * Distribution definitions (Gaussian, Logistic, Hyperbolic Secant, Sin2)
+  * Sampling routines for location–scale families
+  * Encoding and decoding rules for adaptive and non-adaptive schemes
+  * Functions to compute theoretical MSE bounds
 
---------------------------------------------------------------------------------------------------
-Folder Descriptions
---------------------------------------------------------------------------------------------------
+All experiment scripts import this file and therefore it must remain in the
+root directory.
+
+--------------------------------------------------------------------------------
+Experiment Folders
+--------------------------------------------------------------------------------
 
 1. MSE_vs_Samples
-   This folder contains the main experiment that checks how MSE
-   decreases as the number of users (samples) increases.
 
-   - Experiment.py :  runs the simulation and saves the results.
-   - Plot.py: plots the average and worst-case MSE curves.
+This experiment studies the decay of MSE as the number of users (samples)
+increases.
 
-   When Experiment.py is executed, it automatically creates a folder
-   named Avg_Worst_MSE_data which includes several subfolders:
-      * Worst_Case        – stores worst-case MSE results
-      * Average_Case      – stores average-case MSE results
-      * Benchmark         – contains theoretical lower bound data
-      * Upper_Bound       – contains computed upper bound data
+Files:
+  - Experiment.py : runs simulations and saves results
+  - Plot.py       : plots average-case and worst-case MSE curves
 
-   Each file is saved in .pkl (pickle) format, which can be directly
-   loaded later for plotting or further analysis.
+Upon execution, the script creates a directory named Avg_Worst_MSE_data
+containing:
+  * Worst_Case    – worst-case MSE across mean values
+  * Average_Case  – average MSE across mean values
+  * Benchmark     – theoretical lower bound data
+  * Upper_Bound   – computed upper bound data
 
-   Example .pkl files:
-      - gaussian_worst_case.pkl
-      - logistic_average_case.pkl
-      - hypsecant_nonadaptive_lb.pkl
-      - sin2_nonadaptive_ub.pkl
+All results are stored as .pkl files (Python dictionaries), enabling fast
+replotting without rerunning simulations.
 
-   The files store results in the form of Python dictionaries, containing:
-      * The list of total samples used in the experiment
-      * Average and worst-case MSE values for adaptive and non-adaptive schemes
-      * The best mean value where the worst-case occurs
-      * Lower and upper bound constants
+Plots are saved as PDF files in:
+  Worst_Average_MSE_Plots/
 
-   These .pkl files make it easy to replot figures without re-running the entire simulation.
-
-   After the data are generated, Plot.py uses these files to create
-   PDF figures in the folder Worst_Average_MSE_Plots.
-
-   Example plots:
-      - MSE_vs_Samples_gaussian.pdf
-      - MSE_vs_Samples_logistic.pdf
-
----------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 2. MSE_vs_Mean
-   This experiment checks how MSE changes with the true mean
-   (location parameter) of the distribution while keeping variance fixed.
 
-   - Experiment.py runs the simulation for different mean values.
-   - Plot.py plots MSE versus mean.
+This experiment evaluates how the MSE varies with the true mean (location
+parameter), while keeping the variance fixed.
 
-   Results are saved as .pkl files under MSE_vs_mu_Data
-   (automatically created).  
-   The plots are saved in MSE_vs_mu_Plots.
+Files:
+  - Experiment.py : runs simulations over a grid of mean values
+  - Plot.py       : plots MSE versus mean
 
-----------------------------------------------------------------------------------------------
+Results are saved in:
+  MSE_vs_mu_Data/
+
+Plots are saved in:
+  MSE_vs_mu_Plots/
+
+--------------------------------------------------------------------------------
 
 3. Adaptive_NonAdaptive_K
-   This folder compares how different (k1, k2) split ratios affect
-   the adaptive scheme, and how it performs compared to the
-   non-adaptive scheme.
 
-   - Experiment.py runs simulations for multiple k1, k2 settings.
-   - Plot.py produces plots showing both adaptive and non-adaptive results.
+This experiment analyzes the effect of different (k1, k2) sample splits in
+the adaptive scheme and compares them with the non-adaptive scheme.
 
-   Results are stored in .pkl format and figures are saved as PDFs in:
-      * Plots_Non-Adaptive – shows non-adaptive results for each setting
-      * Plots_Adaptive – shows adaptive results for each setting
-      * Plots_Combined – shows adaptive and non-adaptive comparisons
+Files:
+  - Experiment.py : runs simulations for multiple (k1, k2) configurations
+  - Plot.py       : generates comparison plots
 
------------------------------------------------------------------------------------------------
+Output folders:
+  * Plots_Non-Adaptive – non-adaptive results
+  * Plots_Adaptive     – adaptive results
+  * Plots_Combined     – direct comparisons
+
+All data are stored in .pkl format and figures are saved as PDFs.
+
+--------------------------------------------------------------------------------
 
 4. MSE_Beta
-   This experiment studies how the theoretical constants depend on the
-   shape parameter (beta) in the generalized Gaussian distribution.
 
-   - Experiment.py calculates constants for different beta values.
-   - Plot.py creates plots for constants versus beta.
+This experiment studies the dependence of theoretical constants on the
+shape parameter (beta) of the generalized Gaussian distribution.
 
-   Output plots:
-      - constants_vs_beta.pdf
-      - ratio_vs_beta.pdf
+Files:
+  - Experiment.py : computes constants for varying beta
+  - Plot.py       : generates plots
 
-   Saved inside the folder Beta_Plots.
+Output:
+  - constants_vs_beta.pdf
+  - ratio_vs_beta.pdf
 
-------------------------------------------------------------------------------------------------
+Saved in:
+  Beta_Plots/
+
+--------------------------------------------------------------------------------
+
 5. MSE_Fisher_Bound
 
-This folder compares the proposed adaptive and non-adaptive lower bounds with the classical lower bound derived using 
-Fisher information in the no-quantization setting.
+This folder compares the proposed adaptive and non-adaptive lower bounds
+with the classical Fisher information lower bound in the unquantized setting.
 
-  -fisher.py is the main script used to generate the corresponding lower-bound data.
+Files:
+  - fisher.py : computes Fisher-information-based lower bounds
+  - plot.py   : visualizes and compares all three lower bounds
 
-  -plot.py can be used to visualize and compare the lower bounds on the MSE for all three cases.
+This experiment highlights the performance gap induced by one-bit
+quantization relative to the ideal (no-quantization) case.
 
-------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
 6. SIN2_Distribution_Analysis
-   This folder verifies the mathematical properties of the custom Sin2
-   distribution used in the paper.
 
-   - SIN2_data.py checks normalization, variance, log-concavity,
-     and theoretical constants for different p values.
+This folder verifies theoretical properties of the custom Sin2 distribution.
 
-   It prints a summary table in the terminal showing key metrics such as:
-      - normalization constant
-      - variance
-      - minimum phi''(x)
-      - computed constants and ratios
+Files:
+  - SIN2_data.py
 
-   This script does not generate or save data files.
+The script checks:
+  * normalization
+  * variance
+  * log-concavity
+  * relevant theoretical constants
 
+Results are printed to the terminal as a summary table. No files are saved.
 
+--------------------------------------------------------------------------------
+Running the Experiments
+--------------------------------------------------------------------------------
 
------------------------------------------------------------------------------------------------
-Running the Scripts
------------------------------------------------------------------------------------------------
-
-Each experiment is independent and can be executed separately.
-For example:
+Each experiment can be executed independently. Example:
 
     python MSE_vs_Samples/Experiment.py
     python MSE_vs_Samples/Plot.py
@@ -168,17 +167,17 @@ For example:
 
     python SIN2_Distribution_Analysis/SIN2_data.py
 
-All generated plots are stored in their respective folders in PDF format.
+All plots are saved in PDF format in their respective directories.
 
-----------------------------------------------------------------------------------------------
-Important Parameters
-----------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+Default Parameters
+--------------------------------------------------------------------------------
 
-- Number of trials: 2000
-- Maximum number of samples: 40000
-- Mean range: -2.5 to 2.5
-- Standard deviation (scale): 2.0
-- Distributions used: Gaussian, Logistic, Hyperbolic Secant, Sin2
+- Number of trials        : 2000
+- Maximum number of users : 40000
+- Mean range              : [-2.5, 2.5]
+- Standard deviation      : 2.0
+- Distributions           : Gaussian, Logistic, Hyperbolic Secant, Sin2
 
-All random seeds are fixed to ensure that the results are exactly reproducible.
------------------------------------------------------------------------------------------------
+All random seeds are fixed to ensure full reproducibility.
+--------------------------------------------------------------------------------

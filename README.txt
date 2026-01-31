@@ -119,8 +119,18 @@ Folder Descriptions
    Saved inside the folder Beta_Plots.
 
 ------------------------------------------------------------------------------------------------
+5. MSE_Fisher_Bound
 
-5. SIN2_Distribution_Analysis
+This folder compares the proposed adaptive and non-adaptive lower bounds with the classical lower bound derived using 
+Fisher information in the no-quantization setting.
+
+  -fisher.py is the main script used to generate the corresponding lower-bound data.
+
+  -plot.py can be used to visualize and compare the lower bounds on the MSE for all three cases.
+
+------------------------------------------------------------------------------------------------
+
+6. SIN2_Distribution_Analysis
    This folder verifies the mathematical properties of the custom Sin2
    distribution used in the paper.
 
